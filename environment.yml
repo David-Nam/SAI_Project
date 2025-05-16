@@ -1,0 +1,24 @@
+name: sai_project
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pandas
+  - numpy
+  - matplotlib
+  - seaborn
+  - pytorch
+  - torchvision
+  - torchaudio
+  - libjpeg-turbo
+  - libpng
+  - jpeg
+  - pip
+  - pip:
+    - streamlit
+    - openai
+    - python-dotenv
+    - transformers
+    - tqdm 
