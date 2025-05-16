@@ -7,6 +7,8 @@ import torch
 from tqdm import tqdm
 import re
 import os
+import json
+from datetime import datetime
 
 # Set font for plots (macOS 한글 지원)
 plt.rcParams['font.family'] = 'AppleGothic'
@@ -63,13 +65,20 @@ def analyze_kakao_csv(csv_path, model, tokenizer):
     # Detect the structure of the CSV
     print("CSV file structure:", df.columns.tolist())
     
-    # Try to identify message column
+    # Try to identify message column and timestamp column
     message_col = None
+    timestamp_col = None
     possible_cols = ['Text', 'Message', 'Content', 'text', 'message', 'content']
+    possible_time_cols = ['Date', 'Time', 'Timestamp', 'date', 'time', 'timestamp']
     
     for col in possible_cols:
         if col in df.columns:
             message_col = col
+            break
+    
+    for col in possible_time_cols:
+        if col in df.columns:
+            timestamp_col = col
             break
     
     if not message_col:
@@ -84,6 +93,8 @@ def analyze_kakao_csv(csv_path, model, tokenizer):
         return
     
     print(f"Using '{message_col}' as the message column.")
+    if timestamp_col:
+        print(f"Using '{timestamp_col}' as the timestamp column.")
     
     # Clean messages
     df['cleaned_message'] = df[message_col].apply(clean_kakao_message)
@@ -92,9 +103,18 @@ def analyze_kakao_csv(csv_path, model, tokenizer):
     results = []
     
     print(f"Analyzing {len(df)} messages...")
-    for message in tqdm(df['cleaned_message']):
+    for idx, row in tqdm(df.iterrows(), total=len(df)):
+        message = row['cleaned_message']
+        if not message or len(message.strip()) < 2:  # Skip empty or very short texts
+            continue
+            
+        # Get timestamp if available
+        timestamp = row[timestamp_col] if timestamp_col else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Use the pipeline to analyze sentiment
         sentiment_result = analyze_sentiment(message, model, tokenizer)
         if sentiment_result:
+            sentiment_result['timestamp'] = timestamp
             results.append(sentiment_result)
     
     # Create results DataFrame
@@ -112,6 +132,9 @@ def visualize_results(results_df, model_name="KCElectra"):
     output_dir = "results"
     os.makedirs(output_dir, exist_ok=True)
     
+    # Generate timestamp for unique filenames
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
     # Count each class and draw bar chart with dynamic colors
     sentiment_counts = results_df['sentiment'].value_counts()
     plt.figure(figsize=(10, 6))
@@ -122,11 +145,34 @@ def visualize_results(results_df, model_name="KCElectra"):
     plt.ylabel('Number of Messages')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(f'{output_dir}/{model_name}_sentiment_analysis.png')
+    plt.savefig(f'{output_dir}/{model_name}_sentiment_analysis_{timestamp}.png')
     plt.show()
     
     # Save results to CSV
-    results_df.to_csv(f'{output_dir}/{model_name}_results.csv', index=False, encoding='utf-8-sig')
+    results_df.to_csv(f'{output_dir}/{model_name}_results_{timestamp}.csv', index=False, encoding='utf-8-sig')
+    
+    # Create JSON output
+    json_output = {
+        "model_name": model_name,
+        "analysis_timestamp": timestamp,
+        "total_messages": len(results_df),
+        "sentiment_distribution": sentiment_counts.to_dict(),
+        "average_confidence": results_df.groupby('sentiment')['confidence'].mean().to_dict(),
+        "messages": [
+            {
+                "text": row['text'],
+                "sentiment": row['sentiment'],
+                "confidence": float(row['confidence']),
+                "timestamp": row['timestamp']
+            }
+            for _, row in results_df.iterrows()
+        ]
+    }
+    
+    # Save JSON output
+    json_path = f'{output_dir}/{model_name}_results_{timestamp}.json'
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(json_output, f, ensure_ascii=False, indent=2)
     
     # Display average confidence by sentiment
     print("\nAverage confidence by sentiment:")
@@ -140,7 +186,12 @@ def visualize_results(results_df, model_name="KCElectra"):
         sample = results_df[results_df['sentiment'] == sentiment].sort_values('confidence', ascending=False).head(3)
         print(f"\n{sentiment} message examples (highest confidence):")
         for _, row in sample.iterrows():
-            print(f"- {row['text'][:50]}{'...' if len(row['text']) > 50 else ''} (Confidence: {row['confidence']:.4f})")
+            print(f"- [{row['timestamp']}] {row['text'][:50]}{'...' if len(row['text']) > 50 else ''} (Confidence: {row['confidence']:.4f})")
+    
+    print(f"\nResults have been saved to:")
+    print(f"- CSV: {output_dir}/{model_name}_results_{timestamp}.csv")
+    print(f"- JSON: {output_dir}/{model_name}_results_{timestamp}.json")
+    print(f"- Plot: {output_dir}/{model_name}_sentiment_analysis_{timestamp}.png")
 
 # Main function
 def main():
