@@ -16,7 +16,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 class KakaoAnalyzer:
     def __init__(self, model_name="nlp04/korean_sentiment_analysis_kcelectra"):
-        self.model_name = model_name
+        self.model_name = model_name.split('/')[-1]  # 모델 이름에서 경로 부분 제거
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
         self.output_dir = "results"
@@ -47,43 +47,47 @@ class KakaoAnalyzer:
         
         return {"sentiment": sentiment, "confidence": confidence, "text": text}
 
-    def analyze_kakao_csv(self, csv_path):
+    def _load_csv(self, csv_path):
         try:
-            df = pd.read_csv(csv_path, encoding='utf-8')
+            return pd.read_csv(csv_path, encoding='utf-8')
         except UnicodeDecodeError:
             try:
-                df = pd.read_csv(csv_path, encoding='cp949')
-            except:
+                return pd.read_csv(csv_path, encoding='cp949')
+            except (UnicodeDecodeError, pd.errors.EmptyDataError, FileNotFoundError) as e:
+                print(f"Error reading CSV file: {str(e)}")
                 print("Please check the CSV file encoding. Usually 'utf-8' or 'cp949'.")
                 return None
-        
-        print("CSV file structure:", df.columns.tolist())
-        
-        message_col = None
-        timestamp_col = None
+
+    def _find_message_column(self, df):
         possible_cols = ['Text', 'Message', 'Content', 'text', 'message', 'content']
-        possible_time_cols = ['Date', 'Time', 'Timestamp', 'date', 'time', 'timestamp']
-        
         for col in possible_cols:
             if col in df.columns:
-                message_col = col
-                break
-        
+                return col
+        for col in df.columns:
+            if df[col].dtype == 'object' and df[col].str.len().mean() > 10:
+                return col
+        return None
+
+    def _find_timestamp_column(self, df):
+        possible_time_cols = ['Date', 'Time', 'Timestamp', 'date', 'time', 'timestamp']
         for col in possible_time_cols:
             if col in df.columns:
-                timestamp_col = col
-                break
+                return col
+        return None
+
+    def analyze_kakao_csv(self, csv_path):
+        df = self._load_csv(csv_path)
+        if df is None:
+            return None
+
+        print("CSV file structure:", df.columns.tolist())
         
-        if not message_col:
-            for col in df.columns:
-                if df[col].dtype == 'object' and df[col].str.len().mean() > 10:
-                    message_col = col
-                    break
-        
+        message_col = self._find_message_column(df)
         if not message_col:
             print("Could not find a column containing message content.")
             return None
         
+        timestamp_col = self._find_timestamp_column(df)
         print(f"Using '{message_col}' as the message column.")
         if timestamp_col:
             print(f"Using '{timestamp_col}' as the timestamp column.")
@@ -91,7 +95,6 @@ class KakaoAnalyzer:
         df['cleaned_message'] = df[message_col].apply(self.clean_kakao_message)
         
         results = []
-        
         print(f"Analyzing {len(df)} messages...")
         for idx, row in tqdm(df.iterrows(), total=len(df)):
             message = row['cleaned_message']
@@ -117,7 +120,7 @@ class KakaoAnalyzer:
         sentiment_counts = results_df['sentiment'].value_counts()
         plt.figure(figsize=(10, 6))
         palette = sns.color_palette("husl", len(sentiment_counts))
-        ax = sentiment_counts.plot(kind='bar', color=palette)
+        sentiment_counts.plot(kind='bar', color=palette)
         plt.title(f'Sentiment Analysis Results: {self.model_name}')
         plt.xlabel('Sentiment')
         plt.ylabel('Number of Messages')
