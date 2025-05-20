@@ -47,6 +47,57 @@ class KakaoAnalyzer:
         
         return {"sentiment": sentiment, "confidence": confidence, "text": text}
 
+    def _parse_kakao_text(self, text_content):
+        """카카오톡 텍스트 파일을 파싱하여 DataFrame으로 변환"""
+        messages = []
+        current_date = None
+        
+        print("Parsing text file...")
+        for line in text_content.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+                
+            # 날짜 라인 확인
+            if re.match(r'\d{4}년 \d{1,2}월 \d{1,2}일', line):
+                current_date = line
+                print(f"Found date: {current_date}")
+                continue
+                
+            # 메시지 라인 파싱
+            match = re.match(r'(\d{4}\. \d{1,2}\. \d{1,2}\. (?:오전|오후) \d{1,2}:\d{2}), ([^:]+) : (.+)', line)
+            if match:
+                timestamp, sender, message = match.groups()
+                messages.append({
+                    'Date': current_date,
+                    'Time': timestamp,
+                    'Sender': sender,
+                    'Message': message
+                })
+                print(f"Found message: {timestamp} - {sender}: {message[:30]}...")
+        
+        if not messages:
+            print("No messages were parsed from the text file.")
+            return None
+            
+        df = pd.DataFrame(messages)
+        print(f"Successfully parsed {len(df)} messages.")
+        return df
+
+    def _load_file(self, file_path):
+        """파일 형식에 따라 적절한 로딩 방식 선택"""
+        if file_path.endswith('.txt'):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                print(f"Successfully read text file: {file_path}")
+                return self._parse_kakao_text(content)
+            except Exception as e:
+                print(f"Error reading text file: {str(e)}")
+                return None
+        else:
+            return self._load_csv(file_path)
+
     def _load_csv(self, csv_path):
         try:
             return pd.read_csv(csv_path, encoding='utf-8')
@@ -59,6 +110,9 @@ class KakaoAnalyzer:
                 return None
 
     def _find_message_column(self, df):
+        if df is None:
+            return None
+            
         possible_cols = ['Text', 'Message', 'Content', 'text', 'message', 'content']
         for col in possible_cols:
             if col in df.columns:
@@ -75,12 +129,12 @@ class KakaoAnalyzer:
                 return col
         return None
 
-    def analyze_kakao_csv(self, csv_path):
-        df = self._load_csv(csv_path)
+    def analyze_kakao_csv(self, file_path):
+        df = self._load_file(file_path)
         if df is None:
             return None
 
-        print("CSV file structure:", df.columns.tolist())
+        print("File structure:", df.columns.tolist())
         
         message_col = self._find_message_column(df)
         if not message_col:
