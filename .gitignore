@@ -15,7 +15,9 @@ results/
 
 # 데이터
 *.csv
+# requirements.txt를 제외한 모든 .txt 파일 무시
 *.txt
+!requirements.txt
 
 # Streamlit
 .streamlit/
