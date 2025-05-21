@@ -1,5 +1,6 @@
 from klue_sentiment_analyzer import KlueSentimentAnalyzer
 from nlp04 import KakaoAnalyzer
+from word_frequency_analyzer import WordFrequencyAnalyzer
 import os
 
 def get_valid_file_path():
@@ -38,7 +39,7 @@ def get_model_choice():
             print("잘못된 선택입니다. 1 또는 2를 입력해주세요.")
 
 def main():
-    print("카카오톡 대화 감정 분석기")
+    print("카카오톡 대화 분석기")
     print("=====================")
     
     # 모델 선택
@@ -66,6 +67,16 @@ def main():
     # 결과 시각화 및 저장
     if results is not None:
         analyzer.visualize_results(results)
+        
+        # 단어 빈도 분석 수행
+        print("\n단어 빈도 분석을 수행합니다...")
+        word_analyzer = WordFrequencyAnalyzer()
+        try:
+            top_words = word_analyzer.analyze_file(file_path)
+            output_file = word_analyzer.save_results_to_json(file_path, top_words)
+            print(f"\n단어 빈도 분석 결과가 {output_file}에 저장되었습니다.")
+        except Exception as e:
+            print(f"단어 빈도 분석 중 오류 발생: {str(e)}")
     else:
         print("분석을 완료할 수 없습니다.")
 

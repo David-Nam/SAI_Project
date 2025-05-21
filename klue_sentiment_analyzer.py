@@ -193,7 +193,7 @@ class KlueSentimentAnalyzer:
             for _, row in sample.iterrows():
                 print(f"- [{row['timestamp']}] {row['sender']}: {row['text'][:50]}{'...' if len(row['text']) > 50 else ''} (신뢰도: {row['confidence']:.4f})")
         
-        print(f"\n결과가 저장되었습니다:")
+        print("\n결과가 저장되었습니다:")
         print(f"- CSV: {self.output_dir}/sentiment_results_{timestamp}.csv")
         print(f"- JSON: {self.output_dir}/sentiment_results_{timestamp}.json")
         print(f"- 그래프: {self.output_dir}/sentiment_analysis_{timestamp}.png") 

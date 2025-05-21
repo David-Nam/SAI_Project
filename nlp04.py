@@ -142,9 +142,12 @@ class KakaoAnalyzer:
             return None
         
         timestamp_col = self._find_timestamp_column(df)
+        sender_col = 'Sender' if 'Sender' in df.columns else None
         print(f"Using '{message_col}' as the message column.")
         if timestamp_col:
             print(f"Using '{timestamp_col}' as the timestamp column.")
+        if sender_col:
+            print(f"Using '{sender_col}' as the sender column.")
         
         df['cleaned_message'] = df[message_col].apply(self.clean_kakao_message)
         
@@ -156,10 +159,12 @@ class KakaoAnalyzer:
                 continue
                 
             timestamp = row[timestamp_col] if timestamp_col else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            sender = row[sender_col] if sender_col else "Unknown"
             
             sentiment_result = self.analyze_sentiment(message)
             if sentiment_result:
                 sentiment_result['timestamp'] = timestamp
+                sentiment_result['sender'] = sender
                 results.append(sentiment_result)
         
         return pd.DataFrame(results)
@@ -196,7 +201,8 @@ class KakaoAnalyzer:
                     "text": row['text'],
                     "sentiment": row['sentiment'],
                     "confidence": float(row['confidence']),
-                    "timestamp": row['timestamp']
+                    "timestamp": row['timestamp'],
+                    "sender": row['sender']
                 }
                 for _, row in results_df.iterrows()
             ]
