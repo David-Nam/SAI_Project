@@ -50,7 +50,6 @@ class KakaoAnalyzer:
     def _parse_kakao_text(self, text_content):
         """카카오톡 텍스트 파일을 파싱하여 DataFrame으로 변환"""
         messages = []
-        current_date = None
         
         print("Parsing text file...")
         for line in text_content.split('\n'):
@@ -58,23 +57,24 @@ class KakaoAnalyzer:
             if not line:
                 continue
                 
-            # 날짜 라인 확인
-            if re.match(r'\d{4}년 \d{1,2}월 \d{1,2}일', line):
-                current_date = line
-                print(f"Found date: {current_date}")
-                continue
+            # 메시지 라인 파싱 ({date}, {user} : {message} 형식)
+            parts = line.split(',', 1)  # 첫 번째 콤마로 분리
+            if len(parts) == 2:
+                date = parts[0].strip()
+                message_part = parts[1].strip()
                 
-            # 메시지 라인 파싱
-            match = re.match(r'(\d{4}\. \d{1,2}\. \d{1,2}\. (?:오전|오후) \d{1,2}:\d{2}), ([^:]+) : (.+)', line)
-            if match:
-                timestamp, sender, message = match.groups()
-                messages.append({
-                    'Date': current_date,
-                    'Time': timestamp,
-                    'Sender': sender,
-                    'Message': message
-                })
-                print(f"Found message: {timestamp} - {sender}: {message[:30]}...")
+                # 사용자와 메시지 분리
+                user_message = message_part.split(':', 1)
+                if len(user_message) == 2:
+                    user = user_message[0].strip()
+                    message = user_message[1].strip()
+                    
+                    messages.append({
+                        'Date': date,
+                        'Sender': user,
+                        'Message': message
+                    })
+                    print(f"Found message: {date} - {user}: {message[:30]}...")
         
         if not messages:
             print("No messages were parsed from the text file.")
@@ -100,10 +100,20 @@ class KakaoAnalyzer:
 
     def _load_csv(self, csv_path):
         try:
-            return pd.read_csv(csv_path, encoding='utf-8')
+            # CSV 파일 구조: {date}, {"user"}, {"message"}
+            df = pd.read_csv(csv_path, encoding='utf-8')
+            
+            # 컬럼명이 없는 경우 기본 컬럼명 설정
+            if len(df.columns) >= 3:
+                df.columns = ['Date', 'Sender', 'Message'] + list(df.columns[3:])
+            
+            return df
         except UnicodeDecodeError:
             try:
-                return pd.read_csv(csv_path, encoding='cp949')
+                df = pd.read_csv(csv_path, encoding='cp949')
+                if len(df.columns) >= 3:
+                    df.columns = ['Date', 'Sender', 'Message'] + list(df.columns[3:])
+                return df
             except (UnicodeDecodeError, pd.errors.EmptyDataError, FileNotFoundError) as e:
                 print(f"Error reading CSV file: {str(e)}")
                 print("Please check the CSV file encoding. Usually 'utf-8' or 'cp949'.")
@@ -142,9 +152,12 @@ class KakaoAnalyzer:
             return None
         
         timestamp_col = self._find_timestamp_column(df)
+        sender_col = 'Sender' if 'Sender' in df.columns else None
         print(f"Using '{message_col}' as the message column.")
         if timestamp_col:
             print(f"Using '{timestamp_col}' as the timestamp column.")
+        if sender_col:
+            print(f"Using '{sender_col}' as the sender column.")
         
         df['cleaned_message'] = df[message_col].apply(self.clean_kakao_message)
         
@@ -156,10 +169,12 @@ class KakaoAnalyzer:
                 continue
                 
             timestamp = row[timestamp_col] if timestamp_col else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            sender = row[sender_col] if sender_col else "Unknown"
             
             sentiment_result = self.analyze_sentiment(message)
             if sentiment_result:
                 sentiment_result['timestamp'] = timestamp
+                sentiment_result['sender'] = sender
                 results.append(sentiment_result)
         
         return pd.DataFrame(results)
@@ -196,7 +211,8 @@ class KakaoAnalyzer:
                     "text": row['text'],
                     "sentiment": row['sentiment'],
                     "confidence": float(row['confidence']),
-                    "timestamp": row['timestamp']
+                    "timestamp": row['timestamp'],
+                    "sender": row['sender']
                 }
                 for _, row in results_df.iterrows()
             ]

@@ -25,7 +25,6 @@ class KlueSentimentAnalyzer:
     def _parse_kakao_text(self, text_content):
         """카카오톡 텍스트 파일을 파싱하여 DataFrame으로 변환"""
         messages = []
-        current_date = None
         
         print("Parsing text file...")
         for line in text_content.split('\n'):
@@ -33,23 +32,24 @@ class KlueSentimentAnalyzer:
             if not line:
                 continue
                 
-            # 날짜 라인 확인
-            if re.match(r'\d{4}년 \d{1,2}월 \d{1,2}일', line):
-                current_date = line
-                print(f"Found date: {current_date}")
-                continue
+            # 메시지 라인 파싱 ({date}, {user} : {message} 형식)
+            parts = line.split(',', 1)  # 첫 번째 콤마로 분리
+            if len(parts) == 2:
+                date = parts[0].strip()
+                message_part = parts[1].strip()
                 
-            # 메시지 라인 파싱
-            match = re.match(r'(\d{4}\. \d{1,2}\. \d{1,2}\. (?:오전|오후) \d{1,2}:\d{2}), ([^:]+) : (.+)', line)
-            if match:
-                timestamp, sender, message = match.groups()
-                messages.append({
-                    'Date': current_date,
-                    'Time': timestamp,
-                    'Sender': sender,
-                    'Message': message
-                })
-                print(f"Found message: {timestamp} - {sender}: {message[:30]}...")
+                # 사용자와 메시지 분리
+                user_message = message_part.split(':', 1)
+                if len(user_message) == 2:
+                    user = user_message[0].strip()
+                    message = user_message[1].strip()
+                    
+                    messages.append({
+                        'Date': date,
+                        'Sender': user,
+                        'Message': message
+                    })
+                    print(f"Found message: {date} - {user}: {message[:30]}...")
         
         if not messages:
             print("No messages were parsed from the text file.")
@@ -72,10 +72,20 @@ class KlueSentimentAnalyzer:
                 return None
         else:
             try:
-                return pd.read_csv(file_path, encoding='utf-8')
+                # CSV 파일 구조: {date}, {"user"}, {"message"}
+                df = pd.read_csv(file_path, encoding='utf-8')
+                
+                # 컬럼명이 없는 경우 기본 컬럼명 설정
+                if len(df.columns) >= 3:
+                    df.columns = ['Date', 'Sender', 'Message'] + list(df.columns[3:])
+                
+                return df
             except UnicodeDecodeError:
                 try:
-                    return pd.read_csv(file_path, encoding='cp949')
+                    df = pd.read_csv(file_path, encoding='cp949')
+                    if len(df.columns) >= 3:
+                        df.columns = ['Date', 'Sender', 'Message'] + list(df.columns[3:])
+                    return df
                 except Exception as e:
                     print(f"Error reading CSV file: {str(e)}")
                     return None
@@ -111,7 +121,7 @@ class KlueSentimentAnalyzer:
             print("Could not find message column.")
             return None
         
-        timestamp_col = 'Time' if 'Time' in df.columns else None
+        timestamp_col = 'Date' if 'Date' in df.columns else None
         print(f"Using '{message_col}' as the message column.")
         if timestamp_col:
             print(f"Using '{timestamp_col}' as the timestamp column.")
@@ -193,7 +203,7 @@ class KlueSentimentAnalyzer:
             for _, row in sample.iterrows():
                 print(f"- [{row['timestamp']}] {row['sender']}: {row['text'][:50]}{'...' if len(row['text']) > 50 else ''} (신뢰도: {row['confidence']:.4f})")
         
-        print(f"\n결과가 저장되었습니다:")
+        print("\n결과가 저장되었습니다:")
         print(f"- CSV: {self.output_dir}/sentiment_results_{timestamp}.csv")
         print(f"- JSON: {self.output_dir}/sentiment_results_{timestamp}.json")
         print(f"- 그래프: {self.output_dir}/sentiment_analysis_{timestamp}.png") 
