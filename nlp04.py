@@ -9,16 +9,27 @@ import re
 import os
 import json
 from datetime import datetime
+import platform
 
-# Set font for plots (macOS 한글 지원)
-plt.rcParams['font.family'] = 'AppleGothic'
+# Set font for plots (한글 지원)
+system = platform.system()
+if system == 'Darwin':  # macOS
+    plt.rcParams['font.family'] = 'AppleGothic'
+elif system == 'Linux':
+    plt.rcParams['font.family'] = 'NanumGothic'
+else:  # Windows or others
+    plt.rcParams['font.family'] = 'Malgun Gothic'
 plt.rcParams['axes.unicode_minus'] = False
 
 class KakaoAnalyzer:
     def __init__(self, model_name="nlp04/korean_sentiment_analysis_kcelectra"):
         self.model_name = model_name.split('/')[-1]  # 모델 이름에서 경로 부분 제거
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Using device: {self.device}")
+        
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        self.model.to(self.device)  # 모델을 GPU로 이동
         self.output_dir = "results"
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -35,6 +46,7 @@ class KakaoAnalyzer:
             return None
         
         inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}  # 입력을 GPU로 이동
         
         with torch.no_grad():
             outputs = self.model(**inputs)
