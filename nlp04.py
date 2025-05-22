@@ -179,14 +179,7 @@ class KakaoAnalyzer:
         
         return pd.DataFrame(results)
 
-    def visualize_results(self, results_df):
-        if results_df is None or len(results_df) == 0:
-            print("No results to analyze.")
-            return
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        sentiment_counts = results_df['sentiment'].value_counts()
+    def _create_visualization(self, sentiment_counts, timestamp):
         plt.figure(figsize=(10, 6))
         palette = sns.color_palette("husl", len(sentiment_counts))
         sentiment_counts.plot(kind='bar', color=palette)
@@ -196,16 +189,85 @@ class KakaoAnalyzer:
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
         plt.savefig(f'{self.output_dir}/{self.model_name}_sentiment_analysis_{timestamp}.png')
-        plt.show()
+        plt.close()
+
+    def _convert_korean_date(self, date_str):
+        try:
+            if '오후' in date_str:
+                date_str = date_str.replace('오후', '')
+                hour = int(date_str.split(':')[0].split()[-1])
+                if hour < 12:
+                    hour += 12
+                date_str = date_str.replace(str(hour), f"{hour:02d}")
+            elif '오전' in date_str:
+                date_str = date_str.replace('오전', '')
+            
+            date_obj = datetime.strptime(date_str.strip(), '%Y. %m. %d. %H:%M')
+            return date_obj.date()
+        except Exception as e:
+            print(f"Error parsing date: {date_str}, Error: {str(e)}")
+            return None
+
+    def _analyze_daily_user_sentiment(self, results_df):
+        daily_user_analysis = {}
+        results_df['date'] = results_df['timestamp'].apply(self._convert_korean_date)
         
+        for date, date_group in results_df.groupby('date'):
+            if date is None:
+                continue
+                
+            date_str = date.strftime('%Y-%m-%d')
+            daily_user_analysis[date_str] = {}
+            
+            for user, user_group in date_group.groupby('sender'):
+                sentiment_counts = user_group['sentiment'].value_counts()
+                total_messages = len(user_group)
+                sentiment_percentages = (sentiment_counts / total_messages * 100).round(1)
+                
+                daily_user_analysis[date_str][user] = {
+                    "sentiment_counts": sentiment_counts.to_dict(),
+                    "sentiment_percentages": sentiment_percentages.to_dict(),
+                    "total_messages": total_messages
+                }
+        return daily_user_analysis
+
+    def _print_analysis_summary(self, results_df, sentiment_counts):
+        print("\nAverage confidence by sentiment:")
+        avg_confidence = results_df.groupby('sentiment')['confidence'].mean().reset_index()
+        for _, row in avg_confidence.iterrows():
+            print(f"{row['sentiment']}: {row['confidence']:.4f}")
+        
+        print("\nSample message analysis results:")
+        for sentiment in results_df['sentiment'].unique():
+            sample = results_df[results_df['sentiment'] == sentiment].sort_values('confidence', ascending=False).head(3)
+            print(f"\n{sentiment} message examples (highest confidence):")
+            for _, row in sample.iterrows():
+                print(f"- [{row['timestamp']}] {row['text'][:50]}{'...' if len(row['text']) > 50 else ''} (Confidence: {row['confidence']:.4f})")
+
+    def visualize_results(self, results_df):
+        if results_df is None or len(results_df) == 0:
+            print("No results to analyze.")
+            return
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        sentiment_counts = results_df['sentiment'].value_counts()
+        
+        # Create and save visualization
+        self._create_visualization(sentiment_counts, timestamp)
+        
+        # Save CSV results
         results_df.to_csv(f'{self.output_dir}/{self.model_name}_results_{timestamp}.csv', index=False, encoding='utf-8-sig')
         
+        # Analyze daily user sentiment
+        daily_user_analysis = self._analyze_daily_user_sentiment(results_df)
+        
+        # Prepare and save JSON output
         json_output = {
             "model_name": self.model_name,
             "analysis_timestamp": timestamp,
             "total_messages": len(results_df),
             "sentiment_distribution": sentiment_counts.to_dict(),
-            "average_confidence": results_df.groupby('sentiment')['confidence'].mean().to_dict(),
+            "daily_user_analysis": daily_user_analysis,
             "messages": [
                 {
                     "text": row['text'],
@@ -222,17 +284,8 @@ class KakaoAnalyzer:
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(json_output, f, ensure_ascii=False, indent=2)
         
-        print("\nAverage confidence by sentiment:")
-        avg_confidence = results_df.groupby('sentiment')['confidence'].mean().reset_index()
-        for _, row in avg_confidence.iterrows():
-            print(f"{row['sentiment']}: {row['confidence']:.4f}")
-        
-        print("\nSample message analysis results:")
-        for sentiment in results_df['sentiment'].unique():
-            sample = results_df[results_df['sentiment'] == sentiment].sort_values('confidence', ascending=False).head(3)
-            print(f"\n{sentiment} message examples (highest confidence):")
-            for _, row in sample.iterrows():
-                print(f"- [{row['timestamp']}] {row['text'][:50]}{'...' if len(row['text']) > 50 else ''} (Confidence: {row['confidence']:.4f})")
+        # Print analysis summary
+        self._print_analysis_summary(results_df, sentiment_counts)
         
         print("\nResults have been saved to:")
         print(f"- CSV: {self.output_dir}/{self.model_name}_results_{timestamp}.csv")

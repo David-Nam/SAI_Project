@@ -28,10 +28,33 @@
     "sentiment2": 30,
     "sentiment3": 48
   },
-  "average_confidence": {
-    "sentiment1": 0.9234,
-    "sentiment2": 0.8765,
-    "sentiment3": 0.9123
+  "daily_user_analysis": {
+    "2024-03-15": {
+      "사용자1": {
+        "sentiment_counts": {
+          "일상적인": 15,
+          "즐거운": 10,
+          "사랑하는": 5
+        },
+        "sentiment_percentages": {
+          "일상적인": 50.0,
+          "즐거운": 33.3,
+          "사랑하는": 16.7
+        },
+        "total_messages": 30
+      },
+      "사용자2": {
+        "sentiment_counts": {
+          "일상적인": 8,
+          "즐거운": 12
+        },
+        "sentiment_percentages": {
+          "일상적인": 40.0,
+          "즐거운": 60.0
+        },
+        "total_messages": 20
+      }
+    }
   },
   "messages": [
     {
@@ -44,6 +67,13 @@
   ]
 }
 ```
+
+### 추가 기능
+* 감정 분석 결과 시각화 (그래프)
+* 감정별 평균 신뢰도 계산
+* 감정별 대표 메시지 추출
+* 날짜별 사용자 감정 분석 (각 감정의 횟수와 비율)
+* 결과를 CSV, JSON, PNG 형식으로 저장
 
 ## klue_sentiment_analyzer.py
 ### 개요
