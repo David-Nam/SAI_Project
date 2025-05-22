@@ -196,7 +196,7 @@ class KakaoAnalyzer:
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
         plt.savefig(f'{self.output_dir}/{self.model_name}_sentiment_analysis_{timestamp}.png')
-        plt.show()
+        plt.close()  # Close the figure to free memory
         
         results_df.to_csv(f'{self.output_dir}/{self.model_name}_results_{timestamp}.csv', index=False, encoding='utf-8-sig')
         
