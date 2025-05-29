@@ -5,7 +5,7 @@ import os
 def get_valid_file_path():
     """사용자로부터 유효한 파일 경로를 입력받음"""
     while True:
-        file_path = input("\n분석할 파일 경로를 입력하세요 (txt 또는 csv 파일): ").strip()
+        file_path = input("\n분석할 카카오톡 대화 파일 경로를 입력하세요 (txt 또는 csv 파일): ").strip()
         
         if not file_path:
             print("파일 경로를 입력해주세요.")
@@ -25,19 +25,16 @@ def main():
     print("카카오톡 대화 분석기")
     print("=====================")
     
-    # NLP 분석기 초기화
-    print("\nNLP 모델을 사용하여 분석합니다...")
-    analyzer = KakaoAnalyzer()
-    
     # 파일 경로 입력 받기
     file_path = get_valid_file_path()
     
     print(f"\n'{file_path}' 파일을 분석합니다...")
     
-    # 메시지 분석
+    # NLP04 모델로 분석
+    print("\nNLP04 모델을 사용하여 분석합니다...")
+    analyzer = KakaoAnalyzer()
     results = analyzer.analyze_kakao_csv(file_path)
     
-    # 결과 시각화 및 저장
     if results is not None:
         analyzer.visualize_results(results)
         
