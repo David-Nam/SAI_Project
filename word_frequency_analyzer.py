@@ -7,8 +7,9 @@ import json
 from datetime import datetime
 
 class WordFrequencyAnalyzer:
-    def __init__(self):
+    def __init__(self, top_n_words=10):
         self.okt = Okt()
+        self.top_n_words = top_n_words
         
     def preprocess_text(self, text):
         # Remove special characters and numbers
@@ -92,8 +93,8 @@ class WordFrequencyAnalyzer:
         words = self.extract_words(cleaned_text)
         # Count word frequencies
         word_freq = Counter(words)
-        # Get top 10 most common words
-        top_words = word_freq.most_common(10)
+        # Get top N most common words
+        top_words = word_freq.most_common(self.top_n_words)
         return top_words
 
     def save_results_to_json(self, file_path, top_words):

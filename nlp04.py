@@ -42,6 +42,19 @@ class KakaoAnalyzer:
         return ""
 
     def analyze_sentiment(self, text):
+        """
+        주어진 텍스트의 감정을 분석하는 함수
+        
+        Args:
+            text (str): 분석할 텍스트
+            
+        Returns:
+            dict: 감정 분석 결과를 담은 딕셔너리
+                - sentiment: 감정 레이블
+                - confidence: 예측 신뢰도
+                - text: 원본 텍스트
+            None: 텍스트가 너무 짧거나 비어있는 경우
+        """
         if not text or len(text.strip()) < 2:
             return None
         
@@ -60,7 +73,24 @@ class KakaoAnalyzer:
         return {"sentiment": sentiment, "confidence": confidence, "text": text}
 
     def _parse_kakao_text(self, text_content):
-        """카카오톡 텍스트 파일을 파싱하여 DataFrame으로 변환"""
+        """
+        카카오톡 텍스트 파일을 파싱하여 DataFrame으로 변환하는 함수
+        
+        Args:
+            text_content (str): 카카오톡 대화 내용이 담긴 텍스트
+            
+        Returns:
+            pd.DataFrame: 파싱된 메시지를 담은 데이터프레임
+                - Date: 메시지 날짜
+                - Sender: 발신자
+                - Message: 메시지 내용
+            None: 파싱된 메시지가 없는 경우
+            
+        Note:
+            - 입력 텍스트는 '{date}, {user} : {message}' 형식이어야 함
+            - 각 라인은 개행문자로 구분됨
+            - 빈 라인은 무시됨
+        """
         messages = []
         
         print("Parsing text file...")
@@ -152,43 +182,68 @@ class KakaoAnalyzer:
         return None
 
     def analyze_kakao_csv(self, file_path):
+        """
+        카카오톡 대화 파일을 분석하여 감정 분석 결과를 반환하는 함수
+        
+        Args:
+            file_path (str): 분석할 카카오톡 대화 파일의 경로
+            
+        Returns:
+            pd.DataFrame: 감정 분석 결과를 담은 데이터프레임
+            None: 파일 로드 실패 시
+        """
+        # 파일 로드
         df = self._load_file(file_path)
         if df is None:
             return None
 
+        # 파일 구조 출력
         print("File structure:", df.columns.tolist())
         
+        # 메시지 컬럼 찾기
         message_col = self._find_message_column(df)
         if not message_col:
             print("Could not find a column containing message content.")
             return None
         
+        # 타임스탬프와 발신자 컬럼 찾기
         timestamp_col = self._find_timestamp_column(df)
         sender_col = 'Sender' if 'Sender' in df.columns else None
+        
+        # 사용할 컬럼 정보 출력
         print(f"Using '{message_col}' as the message column.")
         if timestamp_col:
             print(f"Using '{timestamp_col}' as the timestamp column.")
         if sender_col:
             print(f"Using '{sender_col}' as the sender column.")
         
+        # 메시지 전처리
         df['cleaned_message'] = df[message_col].apply(self.clean_kakao_message)
         
+        # 감정 분석 결과를 저장할 리스트
         results = []
         print(f"Analyzing {len(df)} messages...")
+        
+        # 각 메시지에 대해 감정 분석 수행
         for idx, row in tqdm(df.iterrows(), total=len(df)):
             message = row['cleaned_message']
+            # 빈 메시지나 너무 짧은 메시지는 건너뛰기
             if not message or len(message.strip()) < 2:
                 continue
                 
+            # 타임스탬프와 발신자 정보 추출
             timestamp = row[timestamp_col] if timestamp_col else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sender = row[sender_col] if sender_col else "Unknown"
             
+            # 감정 분석 수행
             sentiment_result = self.analyze_sentiment(message)
             if sentiment_result:
+                # 결과에 타임스탬프와 발신자 정보 추가
                 sentiment_result['timestamp'] = timestamp
                 sentiment_result['sender'] = sender
                 results.append(sentiment_result)
         
+        # 결과를 데이터프레임으로 변환하여 반환
         return pd.DataFrame(results)
 
     def _create_visualization(self, sentiment_counts, timestamp):
@@ -221,6 +276,27 @@ class KakaoAnalyzer:
             return None
 
     def _analyze_daily_user_sentiment(self, results_df):
+        """
+        일별 사용자별 감정 분석 결과를 계산하는 함수
+        
+        Args:
+            results_df (pd.DataFrame): 감정 분석 결과가 담긴 데이터프레임
+                - timestamp: 메시지 시간
+                - sender: 발신자
+                - sentiment: 감정 레이블
+                
+        Returns:
+            dict: 일별 사용자별 감정 분석 결과
+                {
+                    'YYYY-MM-DD': {
+                        'user_name': {
+                            'sentiment_counts': {감정: 개수},
+                            'sentiment_percentages': {감정: 비율},
+                            'total_messages': 총 메시지 수
+                        }
+                    }
+                }
+        """
         daily_user_analysis = {}
         results_df['date'] = results_df['timestamp'].apply(self._convert_korean_date)
         
@@ -303,33 +379,3 @@ class KakaoAnalyzer:
         print(f"- CSV: {self.output_dir}/{self.model_name}_results_{timestamp}.csv")
         print(f"- JSON: {self.output_dir}/{self.model_name}_results_{timestamp}.json")
         print(f"- Plot: {self.output_dir}/{self.model_name}_sentiment_analysis_{timestamp}.png")
-
-# Main function
-def main():
-    print("nlp04/kcelectra Model Analysis")
-    print("-----------------------------")
-    
-    # Load the model and tokenizer
-    print("Loading model...")
-    model_name = "nlp04/korean_sentiment_analysis_kcelectra"
-    analyzer = KakaoAnalyzer(model_name)
-    
-    # Get CSV file path from user
-    csv_path = input("Enter the path to your KakaoTalk CSV file: ")
-    
-    if not os.path.exists(csv_path):
-        print("File not found. Please check the path.")
-        return
-    
-    # Analyze the CSV file
-    results_df = analyzer.analyze_kakao_csv(csv_path)
-
-    if results_df is not None:
-        # Visualize the results
-        print("\nVisualizing results...")
-        analyzer.visualize_results(results_df)
-        print("\nAnalysis complete! Results saved to the 'results' folder.")
-
-
-if __name__ == "__main__":
-    main()

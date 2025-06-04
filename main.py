@@ -43,7 +43,7 @@ def main():
         
         # 단어 빈도 분석 수행
         print("\n단어 빈도 분석을 수행합니다...")
-        word_analyzer = WordFrequencyAnalyzer()
+        word_analyzer = WordFrequencyAnalyzer(top_n_words=50)
         try:
             top_words = word_analyzer.analyze_file(file_path)
             output_file = word_analyzer.save_results_to_json(file_path, top_words)
